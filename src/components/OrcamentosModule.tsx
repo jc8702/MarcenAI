@@ -14,14 +14,14 @@ export default function OrcamentosModule() {
   return (
     <div style={{ background: 'white', border: '1px solid var(--border)', borderRadius: '8px', padding: '24px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-        <h2 style={{ fontSize: '18px', fontWeight: 700, color: 'var(--navy)' }}>Oramentos</h2>
-        <button className="btn">+ Novo Oramento</button>
+        <h2 style={{ fontSize: '18px', fontWeight: 700, color: 'var(--navy)' }}>Orçamentos</h2>
+        <button className="btn">+ Novo Orçamento</button>
       </div>
 
       {orcamentos.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--text-muted)' }}>
           <div style={{ fontSize: '48px', marginBottom: '16px' }}>📋</div>
-          <p>Nenhum oramento criado ainda</p>
+          <p>Nenhum orçamento criado ainda</p>
         </div>
       ) : (
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>

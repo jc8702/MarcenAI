@@ -43,20 +43,20 @@ export default function EstoqueModule() {
 
       <div style={{ background: 'white', border: '1px solid var(--border)', borderRadius: '8px', padding: '24px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-          <h2 style={{ fontSize: '18px', fontWeight: 700, color: 'var(--navy)' }}>Gesto de Estoque</h2>
+          <h2 style={{ fontSize: '18px', fontWeight: 700, color: 'var(--navy)' }}>Gestão de Estoque</h2>
           <button className="btn">+ Novo Item</button>
         </div>
 
         <div style={{ display: 'flex', gap: '12px', marginBottom: '20px' }}>
           <input 
             type="text"
-            placeholder="Buscar por descrio ou SKU..."
+            placeholder="Buscar por descrição ou SKU..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             style={{ flex: 1 }}
           />
           <select value={filterFamilia} onChange={(e) => setFilterFamilia(e.target.value)} style={{ width: '200px' }}>
-            <option value="TODAS">Todas as famlias</option>
+            <option value="TODAS">Todas as famílias</option>
             {FAMILIAS.map(f => <option key={f} value={f}>{f}</option>)}
           </select>
         </div>
@@ -65,9 +65,9 @@ export default function EstoqueModule() {
           <thead>
             <tr style={{ background: 'var(--bg)' }}>
               <th style={{ textAlign: 'left', padding: '12px', fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', borderBottom: '2px solid var(--border)' }}>SKU</th>
-              <th style={{ textAlign: 'left', padding: '12px', fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', borderBottom: '2px solid var(--border)' }}>Descrio</th>
-              <th style={{ textAlign: 'left', padding: '12px', fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', borderBottom: '2px solid var(--border)' }}>Famlia</th>
-              <th style={{ textAlign: 'right', padding: '12px', fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', borderBottom: '2px solid var(--border)' }}>Preo Custo</th>
+              <th style={{ textAlign: 'left', padding: '12px', fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', borderBottom: '2px solid var(--border)' }}>Descrição</th>
+              <th style={{ textAlign: 'left', padding: '12px', fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', borderBottom: '2px solid var(--border)' }}>Família</th>
+              <th style={{ textAlign: 'right', padding: '12px', fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', borderBottom: '2px solid var(--border)' }}>Preço Custo</th>
             </tr>
           </thead>
           <tbody>

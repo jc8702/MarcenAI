@@ -50,7 +50,7 @@ export default function Home() {
             transition: 'all 0.2s'
           }}
         >
-          Oramentos
+          Orçamentos
         </button>
       </div>
 

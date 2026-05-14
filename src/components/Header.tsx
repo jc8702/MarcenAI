@@ -27,7 +27,7 @@ export default function Header() {
           color: 'var(--navy)'
         }}>D'L</div>
         <h1 style={{ fontSize: '24px', fontWeight: 700, letterSpacing: '-0.5px' }}>
-          D'Luxury - Gesto Comercial
+          D'Luxury - Gestão Comercial
         </h1>
       </div>
     </header>
