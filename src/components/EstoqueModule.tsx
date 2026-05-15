@@ -143,25 +143,39 @@ export default function EstoqueModule() {
     }
   };
 
-  const handleFamilyChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+  const handleFamilyChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
     const val = e.target.value;
     if (val === 'NEW') {
       setIsAddingFamily(true);
       setFormData({ ...formData, familia: '' });
     } else {
       setIsAddingFamily(false);
-      setFormData({ ...formData, familia: val });
+      setFormData(prev => ({ ...prev, familia: val }));
+      
+      // Auto-sugerir SKU ao trocar de família se for um novo item ou se o usuário estiver editando e mudar a família
+      const res = await gerarSugestaoSku(val);
+      if (res.success && res.sku) {
+        setFormData(prev => ({ ...prev, sku: res.sku || '' }));
+      }
     }
   };
 
   const suggestFamilyMetadata = (name: string) => {
     const clean = name.trim().toUpperCase();
+    const prefix = clean.substring(0, 4).replace(/[^A-Z]/g, '');
+    const nextNum = 1001;
+    
     setFamilyData(prev => ({ 
       ...prev, 
       nome: clean, 
-      prefixo: clean.substring(0, 4).replace(/[^A-Z]/g, ''),
-      proximoNumero: 1001
+      prefixo: prefix,
+      proximoNumero: nextNum
     }));
+
+    // Preenche o SKU automaticamente baseado na nova família sendo criada
+    if (prefix) {
+      setFormData(prev => ({ ...prev, sku: `${prefix}-${nextNum}` }));
+    }
   };
 
   const handleDelete = async (id: number) => {
@@ -228,7 +242,8 @@ export default function EstoqueModule() {
     const matchSearch = item.descricao.toLowerCase().includes(searchTerm.toLowerCase()) ||
                       item.sku.toLowerCase().includes(searchTerm.toLowerCase()) ||
                       (item.marca || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-                      (item.fornecedor || '').toLowerCase().includes(searchTerm.toLowerCase());
+                      (item.fornecedor || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                      (item.codigoFornecedor || '').toLowerCase().includes(searchTerm.toLowerCase());
     const matchFamilia = filterFamilia === 'TODAS' || item.familia === filterFamilia;
     return matchSearch && matchFamilia;
   });
@@ -303,7 +318,7 @@ export default function EstoqueModule() {
           <div className="flex-1 relative">
             <input 
               type="text"
-              placeholder="Pesquisar por descrição, SKU, marca ou fornecedor..."
+              placeholder="Pesquisar por descrição, SKU, marca, fornecedor ou código..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-4 bg-surface border-border-custom focus:border-primary text-sm h-11"
@@ -324,7 +339,7 @@ export default function EstoqueModule() {
           {loading ? (
             <div className="p-20 text-center text-muted-custom">Carregando dados do Neon...</div>
           ) : (
-            <table className="min-w-[1000px]">
+            <table className="min-w-[1100px]">
               <thead>
                 <tr>
                   <th className="w-12 text-center">
@@ -339,6 +354,7 @@ export default function EstoqueModule() {
                   <th>Descrição do Insumo</th>
                   <th className="w-32">Marca</th>
                   <th className="w-32">Fornecedor</th>
+                  <th className="w-32">Cód. Forn.</th>
                   <th className="w-40">Classificação</th>
                   <th className="w-40 text-right">Custo Unitário</th>
                   <th className="w-24 text-center">Ações</th>
@@ -347,7 +363,7 @@ export default function EstoqueModule() {
               <tbody>
                 {estoqueFiltrado.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="text-center py-20 text-muted-custom italic">
+                    <td colSpan={9} className="text-center py-20 text-muted-custom italic">
                       Nenhum item encontrado no banco de dados.
                     </td>
                   </tr>
@@ -369,10 +385,13 @@ export default function EstoqueModule() {
                       </td>
                       <td>
                         <div className="font-bold text-white leading-tight">{item.descricao}</div>
-                        <div className="text-[10px] text-muted-custom uppercase mt-1">Ref ID: #{item.id} | Cod. Forn: {item.codigoFornecedor || 'N/A'}</div>
+                        <div className="text-[10px] text-muted-custom uppercase mt-1">Ref ID: #{item.id}</div>
                       </td>
                       <td className="text-muted-custom text-xs font-bold">{item.marca || '-'}</td>
                       <td className="text-muted-custom text-xs font-bold">{item.fornecedor || '-'}</td>
+                      <td className="text-muted-custom text-xs font-bold font-mono">
+                        {item.codigoFornecedor ? `#${item.codigoFornecedor}` : '-'}
+                      </td>
                       <td>
                         <span className="badge-premium badge-green">
                           {item.familia}
