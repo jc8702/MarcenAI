@@ -2,18 +2,63 @@
 'use server';
 
 import { db } from '@/db';
-import { produtos, historicoProdutos } from '@/db/schema';
-import { eq, ilike, or, inArray } from 'drizzle-orm';
+import { produtos, historicoProdutos, familias } from '@/db/schema';
+import { eq, ilike, or, inArray, desc } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import * as XLSX from 'xlsx';
 
 export async function getEstoque(query?: string, familia?: string) {
   try {
-    const data = await db.select().from(produtos).orderBy(produtos.descricao);
+    const data = await db.select().from(produtos).orderBy(desc(produtos.updatedAt));
     return { success: true, data };
   } catch (error) {
     console.error('Erro ao buscar estoque:', error);
     return { success: false, error: 'Falha ao buscar dados do banco' };
+  }
+}
+
+export async function getFamilias() {
+  try {
+    const data = await db.select().from(familias).orderBy(familias.nome);
+    return { success: true, data };
+  } catch (error) {
+    console.error('Erro ao buscar famílias:', error);
+    return { success: false, error: 'Falha ao buscar famílias' };
+  }
+}
+
+export async function upsertFamilia(data: any) {
+  try {
+    const sanitized = {
+      nome: String(data.nome).toUpperCase(),
+      prefixo: String(data.prefixo).toUpperCase(),
+      proximoNumero: Number(data.proximoNumero || 1)
+    };
+
+    if (data.id) {
+      await db.update(familias).set(sanitized).where(eq(familias.id, data.id));
+    } else {
+      await db.insert(familias).values(sanitized);
+    }
+    revalidatePath('/');
+    return { success: true };
+  } catch (error) {
+    console.error('Erro ao salvar família:', error);
+    return { success: false, error: 'Falha ao salvar família' };
+  }
+}
+
+export async function gerarSugestaoSku(familiaNome: string) {
+  try {
+    const fam = await db.select().from(familias).where(eq(familias.nome, familiaNome.toUpperCase())).limit(1);
+    if (fam.length === 0) return { success: false, error: 'Família não encontrada' };
+    
+    const f = fam[0];
+    const skuSugerido = `${f.prefixo}-${String(f.proximoNumero).padStart(4, '0')}`;
+    
+    return { success: true, sku: skuSugerido, proximoNumero: f.proximoNumero };
+  } catch (error) {
+    return { success: false, error: 'Erro ao gerar SKU' };
   }
 }
 
@@ -31,6 +76,7 @@ export async function upsertProduto(data: any) {
     };
 
     if (data.id) {
+      // ... (histórico logic remains)
       // Buscar o produto atual para comparar e salvar histórico
       const current = await db.select().from(produtos).where(eq(produtos.id, data.id)).limit(1);
       
@@ -52,6 +98,20 @@ export async function upsertProduto(data: any) {
         .where(eq(produtos.id, data.id));
     } else {
       await db.insert(produtos).values(sanitizedData);
+      
+      // Incrementar o contador da família se o SKU seguir o padrão
+      const fam = await db.select().from(familias).where(eq(familias.nome, sanitizedData.familia)).limit(1);
+      if (fam.length > 0) {
+        const f = fam[0];
+        const prefixoEsperado = `${f.prefixo}-`;
+        if (sanitizedData.sku.startsWith(prefixoEsperado)) {
+          const numPart = sanitizedData.sku.replace(prefixoEsperado, '');
+          const num = parseInt(numPart);
+          if (!isNaN(num) && num >= f.proximoNumero) {
+            await db.update(familias).set({ proximoNumero: num + 1 }).where(eq(familias.id, f.id));
+          }
+        }
+      }
     }
     revalidatePath('/');
     return { success: true };
@@ -132,6 +192,16 @@ export async function importEstoqueEmMassa(formData: FormData) {
 
     if (batch.length > 0) {
       for (const item of batch) {
+        // Garantir que a família existe
+        const famExist = await db.select().from(familias).where(eq(familias.nome, item.familia)).limit(1);
+        if (famExist.length === 0) {
+          await db.insert(familias).values({
+            nome: item.familia,
+            prefixo: item.familia.substring(0, 4).toUpperCase(),
+            proximoNumero: 1001
+          });
+        }
+
         // Para importação, também verificamos histórico se já existir
         const current = await db.select().from(produtos).where(eq(produtos.sku, item.sku)).limit(1);
         

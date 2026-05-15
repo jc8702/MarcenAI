@@ -1,5 +1,12 @@
-// src/db/schema.ts
 import { pgTable, serial, text, doublePrecision, timestamp, integer } from 'drizzle-orm/pg-core';
+
+export const familias = pgTable('familias', {
+  id: serial('id').primaryKey(),
+  nome: text('nome').unique().notNull(),
+  prefixo: text('prefixo').notNull(), // EX: 'MDF', 'CONV'
+  proximoNumero: integer('proximo_numero').default(1).notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+});
 
 export const produtos = pgTable('produtos', {
   id: serial('id').primaryKey(),

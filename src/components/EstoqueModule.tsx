@@ -1,12 +1,18 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { getEstoque, upsertProduto, deleteProduto, deleteProdutosEmMassa, importEstoqueEmMassa } from '@/actions/estoque';
-
-const FAMILIAS = [
-  'FERRAGENS', 'MDF', 'ACABAMENTOS', 'ILUMINAÇÃO', 'VIDROS', 'METAIS', 'ACESSÓRIOS', 'SERVIÇOS', 'OUTROS'
-];
+import { 
+  getEstoque, 
+  upsertProduto, 
+  deleteProduto, 
+  deleteProdutosEmMassa, 
+  importEstoqueEmMassa,
+  getFamilias,
+  upsertFamilia,
+  gerarSugestaoSku 
+} from '@/actions/estoque';
 
 export default function EstoqueModule() {
   const [estoque, setEstoque] = useState<any[]>([]);
+  const [familias, setFamilias] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterFamilia, setFilterFamilia] = useState('TODAS');
@@ -16,10 +22,12 @@ export default function EstoqueModule() {
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
+  const [isAddingFamily, setIsAddingFamily] = useState(false);
+  
   const [formData, setFormData] = useState({
     sku: '',
     descricao: '',
-    familia: 'MDF',
+    familia: '',
     unidade: 'UN',
     marca: '',
     fornecedor: '',
@@ -27,11 +35,41 @@ export default function EstoqueModule() {
     preco_custo: 0
   });
 
+  const [familyData, setFamilyData] = useState({
+    nome: '',
+    prefixo: '',
+    proximoNumero: 1
+  });
+
   const loadData = async () => {
     setLoading(true);
-    const res = await getEstoque();
-    if (res.success) {
-      setEstoque(res.data || []);
+    const [resEstoque, resFamilias] = await Promise.all([getEstoque(), getFamilias()]);
+    
+    if (resEstoque.success) setEstoque(resEstoque.data || []);
+    
+    if (resFamilias.success) {
+      const fams = resFamilias.data || [];
+      setFamilias(fams);
+      
+      // Se não houver famílias, inicializa com as padrões
+      if (fams.length === 0) {
+        const defaultFamilies = [
+          { nome: 'FERRAGENS', prefixo: 'FERR', proximoNumero: 1001 },
+          { nome: 'MDF', prefixo: 'MDF', proximoNumero: 1001 },
+          { nome: 'ACABAMENTOS', prefixo: 'ACAB', proximoNumero: 1001 },
+          { nome: 'ILUMINAÇÃO', prefixo: 'ILUM', proximoNumero: 1001 },
+          { nome: 'VIDROS', prefixo: 'VIDR', proximoNumero: 1001 },
+          { nome: 'METAIS', prefixo: 'META', proximoNumero: 1001 },
+          { nome: 'ACESSÓRIOS', prefixo: 'ACES', proximoNumero: 1001 },
+          { nome: 'SERVIÇOS', prefixo: 'SERV', proximoNumero: 1001 },
+          { nome: 'OUTROS', prefixo: 'OUTR', proximoNumero: 1001 },
+        ];
+        for (const f of defaultFamilies) {
+          await upsertFamilia(f);
+        }
+        const resReload = await getFamilias();
+        if (resReload.success) setFamilias(resReload.data || []);
+      }
     }
     setLoading(false);
   };
@@ -45,10 +83,10 @@ export default function EstoqueModule() {
     if (!file) return;
 
     setLoading(true);
-    const formData = new FormData();
-    formData.append('file', file);
+    const formDataImport = new FormData();
+    formDataImport.append('file', file);
     
-    const res = await importEstoqueEmMassa(formData);
+    const res = await importEstoqueEmMassa(formDataImport);
     if (res.success) {
       alert(`${res.count} itens importados com sucesso!`);
       loadData();
@@ -61,14 +99,27 @@ export default function EstoqueModule() {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    const res = await upsertProduto(editingItem ? { ...formData, id: editingItem.id } : formData);
+    
+    let familiaFinal = formData.familia;
+
+    if (isAddingFamily && familyData.nome && familyData.prefixo) {
+      const resFam = await upsertFamilia(familyData);
+      if (!resFam.success) {
+        alert('Erro ao criar família: ' + resFam.error);
+        return;
+      }
+      familiaFinal = familyData.nome.toUpperCase();
+    }
+
+    const res = await upsertProduto(editingItem ? { ...formData, id: editingItem.id, familia: familiaFinal } : { ...formData, familia: familiaFinal });
     if (res.success) {
       setIsModalOpen(false);
       setEditingItem(null);
+      setIsAddingFamily(false);
       setFormData({ 
         sku: '', 
         descricao: '', 
-        familia: 'MDF', 
+        familia: familias[0]?.nome || '', 
         unidade: 'UN', 
         marca: '', 
         fornecedor: '', 
@@ -77,6 +128,40 @@ export default function EstoqueModule() {
       });
       loadData();
     }
+  };
+
+  const handleSuggestSku = async () => {
+    if (!formData.familia) {
+      alert('Selecione uma família primeiro.');
+      return;
+    }
+    const res = await gerarSugestaoSku(formData.familia);
+    if (res.success) {
+      setFormData(prev => ({ ...prev, sku: res.sku || '' }));
+    } else {
+      alert('Erro: ' + res.error);
+    }
+  };
+
+  const handleFamilyChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const val = e.target.value;
+    if (val === 'NEW') {
+      setIsAddingFamily(true);
+      setFormData({ ...formData, familia: '' });
+    } else {
+      setIsAddingFamily(false);
+      setFormData({ ...formData, familia: val });
+    }
+  };
+
+  const suggestFamilyMetadata = (name: string) => {
+    const clean = name.trim().toUpperCase();
+    setFamilyData(prev => ({ 
+      ...prev, 
+      nome: clean, 
+      prefixo: clean.substring(0, 4).replace(/[^A-Z]/g, ''),
+      proximoNumero: 1001
+    }));
   };
 
   const handleDelete = async (id: number) => {
@@ -110,6 +195,7 @@ export default function EstoqueModule() {
   };
 
   const openModal = (item?: any) => {
+    setIsAddingFamily(false);
     if (item) {
       setEditingItem(item);
       setFormData({
@@ -127,7 +213,7 @@ export default function EstoqueModule() {
       setFormData({ 
         sku: '', 
         descricao: '', 
-        familia: 'MDF', 
+        familia: familias[0]?.nome || '', 
         unidade: 'UN', 
         marca: '', 
         fornecedor: '', 
@@ -229,7 +315,7 @@ export default function EstoqueModule() {
             className="w-full sm:w-64 bg-surface border-border-custom focus:border-primary text-sm h-11"
           >
             <option value="TODAS">Todas as Famílias</option>
-            {FAMILIAS.map(f => <option key={f} value={f}>{f}</option>)}
+            {familias.map(f => <option key={f.id} value={f.nome}>{f.nome}</option>)}
           </select>
         </div>
 
@@ -338,26 +424,86 @@ export default function EstoqueModule() {
             <form onSubmit={handleSave} className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="flex flex-col gap-1">
-                  <label className="text-[10px] uppercase font-bold text-muted-custom">SKU / Código</label>
-                  <input 
-                    required
-                    type="text" 
-                    value={formData.sku} 
-                    onChange={(e) => setFormData({...formData, sku: e.target.value.toUpperCase()})}
-                    placeholder="EX: MDF-18-BR"
-                    className="uppercase"
-                  />
-                </div>
-                <div className="flex flex-col gap-1">
                   <label className="text-[10px] uppercase font-bold text-muted-custom">Família</label>
                   <select 
-                    value={formData.familia} 
-                    onChange={(e) => setFormData({...formData, familia: e.target.value})}
+                    required
+                    value={isAddingFamily ? 'NEW' : formData.familia} 
+                    onChange={handleFamilyChange}
                   >
-                    {FAMILIAS.map(f => <option key={f} value={f}>{f}</option>)}
+                    <option value="" disabled>Selecione uma Família</option>
+                    {familias.map(f => <option key={f.id} value={f.nome}>{f.nome}</option>)}
+                    <option value="NEW" className="text-primary font-bold">+ ADICIONAR NOVA FAMÍLIA</option>
                   </select>
                 </div>
+
+                <div className="flex flex-col gap-1 relative">
+                  <label className="text-[10px] uppercase font-bold text-muted-custom">SKU / Código</label>
+                  <div className="flex gap-2">
+                    <input 
+                      required
+                      type="text" 
+                      value={formData.sku} 
+                      onChange={(e) => setFormData({...formData, sku: e.target.value.toUpperCase()})}
+                      placeholder="MDF-1001"
+                      className="uppercase flex-1"
+                    />
+                    {!editingItem && !isAddingFamily && (
+                      <button 
+                        type="button"
+                        onClick={handleSuggestSku}
+                        className="px-3 bg-primary/10 border border-primary/30 rounded text-[10px] font-bold text-primary hover:bg-primary hover:text-white transition-all"
+                        title="Gerar SKU automático baseado na família"
+                      >
+                        ✨ GERAR
+                      </button>
+                    )}
+                  </div>
+                </div>
               </div>
+
+              {isAddingFamily && (
+                <div className="p-4 bg-primary/5 border border-primary/20 rounded-lg space-y-4 animate-in fade-in slide-in-from-top-2">
+                  <p className="text-[10px] uppercase font-bold text-primary">Configuração da Nova Família</p>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[10px] uppercase font-bold text-muted-custom">Nome</label>
+                      <input 
+                        type="text" 
+                        placeholder="EX: CONVERSOR"
+                        value={familyData.nome}
+                        onChange={(e) => suggestFamilyMetadata(e.target.value)}
+                        className="bg-dark/50"
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[10px] uppercase font-bold text-muted-custom">Prefixo SKU</label>
+                      <input 
+                        type="text" 
+                        placeholder="EX: CONV"
+                        value={familyData.prefixo}
+                        onChange={(e) => setFamilyData({...familyData, prefixo: e.target.value.toUpperCase()})}
+                        className="bg-dark/50"
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[10px] uppercase font-bold text-muted-custom">Início em</label>
+                      <input 
+                        type="number" 
+                        value={familyData.proximoNumero}
+                        onChange={(e) => setFamilyData({...familyData, proximoNumero: parseInt(e.target.value)})}
+                        className="bg-dark/50"
+                      />
+                    </div>
+                  </div>
+                  <button 
+                    type="button" 
+                    onClick={() => setIsAddingFamily(false)}
+                    className="text-[10px] uppercase font-bold text-muted-custom hover:text-white"
+                  >
+                    ← Voltar para lista
+                  </button>
+                </div>
+              )}
 
               <div className="flex flex-col gap-1">
                 <label className="text-[10px] uppercase font-bold text-muted-custom">Descrição Completa</label>
