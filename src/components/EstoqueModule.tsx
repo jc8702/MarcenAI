@@ -127,6 +127,8 @@ export default function EstoqueModule() {
         preco_custo: 0 
       });
       loadData();
+    } else {
+      alert('Erro ao salvar item: ' + res.error);
     }
   };
 

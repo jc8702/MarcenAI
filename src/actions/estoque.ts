@@ -54,9 +54,22 @@ export async function gerarSugestaoSku(familiaNome: string) {
     if (fam.length === 0) return { success: false, error: 'Família não encontrada' };
     
     const f = fam[0];
-    const skuSugerido = `${f.prefixo}-${String(f.proximoNumero).padStart(4, '0')}`;
+    let proximoNum = f.proximoNumero;
+    let skuSugerido = `${f.prefixo}-${String(proximoNum).padStart(4, '0')}`;
     
-    return { success: true, sku: skuSugerido, proximoNumero: f.proximoNumero };
+    // Garantir que o SKU não existe na base
+    let skuExiste = true;
+    while (skuExiste) {
+      const conflito = await db.select({ id: produtos.id }).from(produtos).where(eq(produtos.sku, skuSugerido)).limit(1);
+      if (conflito.length > 0) {
+        proximoNum++;
+        skuSugerido = `${f.prefixo}-${String(proximoNum).padStart(4, '0')}`;
+      } else {
+        skuExiste = false;
+      }
+    }
+    
+    return { success: true, sku: skuSugerido, proximoNumero: proximoNum };
   } catch (error) {
     return { success: false, error: 'Erro ao gerar SKU' };
   }
@@ -76,7 +89,6 @@ export async function upsertProduto(data: any) {
     };
 
     if (data.id) {
-      // ... (histórico logic remains)
       // Buscar o produto atual para comparar e salvar histórico
       const current = await db.select().from(produtos).where(eq(produtos.id, data.id)).limit(1);
       
@@ -98,18 +110,18 @@ export async function upsertProduto(data: any) {
         .where(eq(produtos.id, data.id));
     } else {
       await db.insert(produtos).values(sanitizedData);
-      
-      // Incrementar o contador da família se o SKU seguir o padrão
-      const fam = await db.select().from(familias).where(eq(familias.nome, sanitizedData.familia)).limit(1);
-      if (fam.length > 0) {
-        const f = fam[0];
-        const prefixoEsperado = `${f.prefixo}-`;
-        if (sanitizedData.sku.startsWith(prefixoEsperado)) {
-          const numPart = sanitizedData.sku.replace(prefixoEsperado, '');
-          const num = parseInt(numPart);
-          if (!isNaN(num) && num >= f.proximoNumero) {
-            await db.update(familias).set({ proximoNumero: num + 1 }).where(eq(familias.id, f.id));
-          }
+    }
+    
+    // Incrementar o contador da família se o SKU recém-salvo seguir o padrão e for maior ou igual ao próximo
+    const fam = await db.select().from(familias).where(eq(familias.nome, sanitizedData.familia)).limit(1);
+    if (fam.length > 0) {
+      const f = fam[0];
+      const prefixoEsperado = `${f.prefixo}-`;
+      if (sanitizedData.sku.startsWith(prefixoEsperado)) {
+        const numPart = sanitizedData.sku.replace(prefixoEsperado, '');
+        const num = parseInt(numPart);
+        if (!isNaN(num) && num >= f.proximoNumero) {
+          await db.update(familias).set({ proximoNumero: num + 1 }).where(eq(familias.id, f.id));
         }
       }
     }
