@@ -3,32 +3,32 @@ import React from 'react';
 
 export default function Header() {
   return (
-    <header style={{
-      background: 'var(--navy)',
-      color: 'white',
-      padding: '24px 32px',
-      borderRadius: '8px',
-      marginBottom: '24px',
-      display: 'flex',
-      justifyContent: 'space-between',
-      alignItems: 'center'
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-        <div style={{
-          width: '40px',
-          height: '40px',
-          background: 'var(--gold)',
-          borderRadius: '6px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontWeight: 700,
-          fontSize: '18px',
-          color: 'var(--navy)'
-        }}>D'L</div>
-        <h1 style={{ fontSize: '24px', fontWeight: 700, letterSpacing: '-0.5px' }}>
-          D'Luxury - Gestão Comercial
-        </h1>
+    <header className="flex justify-between items-center bg-surface border-b border-border p-6 rounded-xl mb-8 shadow-2xl">
+      <div className="flex items-center gap-4">
+        <div className="relative">
+          <img 
+            src="/logo.png" 
+            alt="D'Luxury Logo" 
+            className="h-12 w-auto filter drop-shadow-[0_2px_8px_rgba(255,99,31,0.3)] transition-transform hover:scale-105"
+          />
+        </div>
+        <div>
+          <h1 className="text-2xl font-black tracking-tighter text-white">
+            MARCEN<span className="text-primary italic">AI</span>
+          </h1>
+          <p className="text-[10px] uppercase tracking-[0.3em] text-muted-custom font-bold">
+            Industrial Premium System
+          </p>
+        </div>
+      </div>
+      
+      <div className="flex items-center gap-6">
+        <div className="flex items-center gap-3 pr-4">
+          <div className="text-right hidden sm:block">
+            <p className="text-[10px] text-muted-custom uppercase tracking-widest font-bold">Unidade Fabril</p>
+            <p className="text-xs text-white font-black">MATRIZ 01</p>
+          </div>
+        </div>
       </div>
     </header>
   );

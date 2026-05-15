@@ -1,0 +1,86 @@
+// src/actions/estoque.ts
+'use server';
+
+import { db } from '@/db';
+import { produtos } from '@/db/schema';
+import { eq, ilike, or } from 'drizzle-orm';
+import { revalidatePath } from 'next/cache';
+import * as XLSX from 'xlsx';
+
+export async function getEstoque(query?: string, familia?: string) {
+  try {
+    const data = await db.select().from(produtos).orderBy(produtos.descricao);
+    return { success: true, data };
+  } catch (error) {
+    console.error('Erro ao buscar estoque:', error);
+    return { success: false, error: 'Falha ao buscar dados do banco' };
+  }
+}
+
+export async function upsertProduto(data: any) {
+  try {
+    const sanitizedData = {
+      ...data,
+      sku: String(data.sku || '').toUpperCase(),
+      descricao: String(data.descricao || '').toUpperCase(),
+      familia: String(data.familia || '').toUpperCase(),
+      unidade: String(data.unidade || '').toUpperCase()
+    };
+
+    if (data.id) {
+      await db.update(produtos)
+        .set({ ...sanitizedData, updatedAt: new Date() })
+        .where(eq(produtos.id, data.id));
+    } else {
+      await db.insert(produtos).values(sanitizedData);
+    }
+    revalidatePath('/');
+    return { success: true };
+  } catch (error) {
+    console.error('Erro ao salvar produto:', error);
+    return { success: false, error: 'Falha ao persistir dados' };
+  }
+}
+
+export async function deleteProduto(id: number) {
+  try {
+    await db.delete(produtos).where(eq(produtos.id, id));
+    revalidatePath('/');
+    return { success: true };
+  } catch (error) {
+    console.error('Erro ao excluir produto:', error);
+    return { success: false, error: 'Falha ao remover item' };
+  }
+}
+
+export async function importEstoqueEmMassa(formData: FormData) {
+  try {
+    const file = formData.get('file') as File;
+    if (!file) throw new Error('Arquivo não encontrado');
+
+    const bytes = await file.arrayBuffer();
+    const workbook = XLSX.read(bytes, { type: 'array' });
+    const sheetName = workbook.SheetNames[0];
+    const worksheet = workbook.Sheets[sheetName];
+    
+    const data = XLSX.utils.sheet_to_json(worksheet) as any[];
+
+    const batch = data.map(row => ({
+      sku: String(row.SKU || row.sku || '').toUpperCase(),
+      descricao: String(row.Descricao || row.descricao || '').toUpperCase(),
+      familia: String(row.Familia || row.familia || 'OUTROS').toUpperCase(),
+      unidade: String(row.Unidade || row.unidade || 'UN').toUpperCase(),
+      preco_custo: parseFloat(String(row.Preco_Custo || row.preco_custo || 0).replace(',', '.'))
+    })).filter(item => item.sku && item.descricao);
+
+    if (batch.length > 0) {
+      await db.insert(produtos).values(batch);
+    }
+    
+    revalidatePath('/');
+    return { success: true, count: batch.length };
+  } catch (error) {
+    console.error('Erro na importação em massa:', error);
+    return { success: false, error: 'Erro ao processar planilha' };
+  }
+}

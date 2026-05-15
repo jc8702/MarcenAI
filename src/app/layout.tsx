@@ -1,11 +1,10 @@
 // src/app/layout.tsx
 import type { Metadata } from "next";
 import "./globals.css";
-import Header from "@/components/Header";
 
 export const metadata: Metadata = {
-  title: "D'Luxury - Gesto Comercial",
-  description: "Sistema de Gesto de Estoque e Oramentos",
+  title: "D'Luxury - Gestão Comercial",
+  description: "Sistema de Gestão de Estoque e Orçamentos",
 };
 
 export default function RootLayout({
@@ -15,11 +14,8 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="pt-BR">
-      <body>
-        <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '20px' }}>
-          <Header />
-          {children}
-        </div>
+      <body className="bg-dark">
+        {children}
       </body>
     </html>
   );
