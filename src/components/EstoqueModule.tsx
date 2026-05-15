@@ -647,6 +647,7 @@ export default function EstoqueModule() {
               </div>
             )}
           </div>
+        </div>
       )}
     </div>
   );
