@@ -63,20 +63,28 @@ export async function importEstoqueEmMassa(formData: FormData) {
     const sheetName = workbook.SheetNames[0];
     const worksheet = workbook.Sheets[sheetName];
     
-    const data = XLSX.utils.sheet_to_json(worksheet) as any[];
+    const data = XLSX.utils.sheet_to_json(worksheet, { raw: false }) as any[];
 
     const parseMoeda = (valor: any): number => {
-      if (typeof valor === 'number') return valor;
       if (!valor) return 0;
-      // Remove R$, espaços e caracteres não numéricos exceto vírgula e ponto
-      let limpo = String(valor).replace(/[^\d,.-]/g, '');
+      
+      // Se já for número, mas queremos garantir que não foi importado errado (ex: 22176 em vez de 221.76)
+      // Porém, vindo do raw: false, será string.
+      
+      let s = String(valor).trim();
+      
+      // Remove R$, espaços e caracteres não numéricos exceto vírgula e ponto e sinal de menos
+      let limpo = s.replace(/[^\d,.-]/g, '');
+      
       if (limpo.includes(',') && limpo.includes('.')) {
-        // Padrão BR: 1.234,56 -> remove ponto e troca vírgula por ponto
+        // Formato: 1.234,56 -> O ponto é milhar, a vírgula é decimal
         limpo = limpo.replace(/\./g, '').replace(',', '.');
       } else if (limpo.includes(',')) {
-        // Padrão BR simples: 221,76 -> troca vírgula por ponto
+        // Formato: 221,76 ou 1,77 -> A vírgula é decimal
         limpo = limpo.replace(',', '.');
       }
+      // Se tiver apenas ponto, como em 160.00 ou 160, tratamos como padrão US/JS
+      
       const num = parseFloat(limpo);
       return isNaN(num) ? 0 : num;
     };
