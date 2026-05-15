@@ -65,16 +65,45 @@ export async function importEstoqueEmMassa(formData: FormData) {
     
     const data = XLSX.utils.sheet_to_json(worksheet) as any[];
 
+    const parseMoeda = (valor: any): number => {
+      if (typeof valor === 'number') return valor;
+      if (!valor) return 0;
+      // Remove R$, espaços e caracteres não numéricos exceto vírgula e ponto
+      let limpo = String(valor).replace(/[^\d,.-]/g, '');
+      if (limpo.includes(',') && limpo.includes('.')) {
+        // Padrão BR: 1.234,56 -> remove ponto e troca vírgula por ponto
+        limpo = limpo.replace(/\./g, '').replace(',', '.');
+      } else if (limpo.includes(',')) {
+        // Padrão BR simples: 221,76 -> troca vírgula por ponto
+        limpo = limpo.replace(',', '.');
+      }
+      const num = parseFloat(limpo);
+      return isNaN(num) ? 0 : num;
+    };
+
     const batch = data.map(row => ({
       sku: String(row.SKU || row.sku || '').toUpperCase(),
       descricao: String(row.Descricao || row.descricao || '').toUpperCase(),
       familia: String(row.Familia || row.familia || 'OUTROS').toUpperCase(),
       unidade: String(row.Unidade || row.unidade || 'UN').toUpperCase(),
-      preco_custo: parseFloat(String(row.Preco_Custo || row.preco_custo || 0).replace(',', '.'))
+      preco_custo: parseMoeda(row.Preco_Custo || row.preco_custo || 0)
     })).filter(item => item.sku && item.descricao);
 
     if (batch.length > 0) {
-      await db.insert(produtos).values(batch);
+      for (const item of batch) {
+        await db.insert(produtos)
+          .values(item)
+          .onConflictDoUpdate({
+            target: produtos.sku,
+            set: {
+              descricao: item.descricao,
+              familia: item.familia,
+              unidade: item.unidade,
+              preco_custo: item.preco_custo,
+              updatedAt: new Date()
+            }
+          });
+      }
     }
     
     revalidatePath('/');
