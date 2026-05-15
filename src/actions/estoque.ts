@@ -2,8 +2,8 @@
 'use server';
 
 import { db } from '@/db';
-import { produtos } from '@/db/schema';
-import { eq, ilike, or } from 'drizzle-orm';
+import { produtos, historicoProdutos } from '@/db/schema';
+import { eq, ilike, or, inArray } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import * as XLSX from 'xlsx';
 
@@ -24,10 +24,29 @@ export async function upsertProduto(data: any) {
       sku: String(data.sku || '').toUpperCase(),
       descricao: String(data.descricao || '').toUpperCase(),
       familia: String(data.familia || '').toUpperCase(),
-      unidade: String(data.unidade || '').toUpperCase()
+      unidade: String(data.unidade || '').toUpperCase(),
+      marca: String(data.marca || '').toUpperCase(),
+      fornecedor: String(data.fornecedor || '').toUpperCase(),
+      codigoFornecedor: String(data.codigoFornecedor || '').toUpperCase(),
     };
 
     if (data.id) {
+      // Buscar o produto atual para comparar e salvar histórico
+      const current = await db.select().from(produtos).where(eq(produtos.id, data.id)).limit(1);
+      
+      if (current.length > 0) {
+        const p = current[0];
+        // Se mudou marca, fornecedor ou preço, salva histórico
+        if (p.marca !== sanitizedData.marca || p.fornecedor !== sanitizedData.fornecedor || p.preco_custo !== sanitizedData.preco_custo) {
+          await db.insert(historicoProdutos).values({
+            produtoId: p.id,
+            marca: p.marca,
+            fornecedor: p.fornecedor,
+            preco_custo: p.preco_custo,
+          });
+        }
+      }
+
       await db.update(produtos)
         .set({ ...sanitizedData, updatedAt: new Date() })
         .where(eq(produtos.id, data.id));
@@ -39,6 +58,17 @@ export async function upsertProduto(data: any) {
   } catch (error) {
     console.error('Erro ao salvar produto:', error);
     return { success: false, error: 'Falha ao persistir dados' };
+  }
+}
+
+export async function deleteProdutosEmMassa(ids: number[]) {
+  try {
+    await db.delete(produtos).where(inArray(produtos.id, ids));
+    revalidatePath('/');
+    return { success: true };
+  } catch (error) {
+    console.error('Erro ao excluir em massa:', error);
+    return { success: false, error: 'Falha ao remover itens selecionados' };
   }
 }
 
@@ -94,11 +124,29 @@ export async function importEstoqueEmMassa(formData: FormData) {
       descricao: String(row.Descricao || row.descricao || '').toUpperCase(),
       familia: String(row.Familia || row.familia || 'OUTROS').toUpperCase(),
       unidade: String(row.Unidade || row.unidade || 'UN').toUpperCase(),
+      marca: String(row.Marca || row.marca || '').toUpperCase(),
+      fornecedor: String(row.Fornecedor || row.fornecedor || '').toUpperCase(),
+      codigoFornecedor: String(row.CodigoFornecedor || row.codigo_fornecedor || row.Codigo_Fornecedor || '').toUpperCase(),
       preco_custo: parseMoeda(row.Preco_Custo || row.preco_custo || 0)
     })).filter(item => item.sku && item.descricao);
 
     if (batch.length > 0) {
       for (const item of batch) {
+        // Para importação, também verificamos histórico se já existir
+        const current = await db.select().from(produtos).where(eq(produtos.sku, item.sku)).limit(1);
+        
+        if (current.length > 0) {
+          const p = current[0];
+          if (p.marca !== item.marca || p.fornecedor !== item.fornecedor || p.preco_custo !== item.preco_custo) {
+            await db.insert(historicoProdutos).values({
+              produtoId: p.id,
+              marca: p.marca,
+              fornecedor: p.fornecedor,
+              preco_custo: p.preco_custo,
+            });
+          }
+        }
+
         await db.insert(produtos)
           .values(item)
           .onConflictDoUpdate({
@@ -107,6 +155,9 @@ export async function importEstoqueEmMassa(formData: FormData) {
               descricao: item.descricao,
               familia: item.familia,
               unidade: item.unidade,
+              marca: item.marca,
+              fornecedor: item.fornecedor,
+              codigoFornecedor: item.codigoFornecedor,
               preco_custo: item.preco_custo,
               updatedAt: new Date()
             }

@@ -9,9 +9,19 @@ export const produtos = pgTable('produtos', {
   unidade: text('unidade').notNull(),
   marca: text('marca'),
   fornecedor: text('fornecedor'),
+  codigoFornecedor: text('codigo_fornecedor'),
   preco_custo: doublePrecision('preco_custo').notNull(),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+export const historicoProdutos = pgTable('historico_produtos', {
+  id: serial('id').primaryKey(),
+  produtoId: integer('produto_id').references(() => produtos.id, { onDelete: 'cascade' }),
+  marca: text('marca'),
+  fornecedor: text('fornecedor'),
+  preco_custo: doublePrecision('preco_custo'),
+  alteradoEm: timestamp('alterado_em').defaultNow(),
 });
 
 export const orcamentos = pgTable('orcamentos', {

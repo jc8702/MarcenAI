@@ -1,8 +1,5 @@
-// src/components/EstoqueModule.tsx
-'use client';
-
 import React, { useState, useEffect, useRef } from 'react';
-import { getEstoque, upsertProduto, deleteProduto, importEstoqueEmMassa } from '@/actions/estoque';
+import { getEstoque, upsertProduto, deleteProduto, deleteProdutosEmMassa, importEstoqueEmMassa } from '@/actions/estoque';
 
 const FAMILIAS = [
   'FERRAGENS', 'MDF', 'ACABAMENTOS', 'ILUMINAÇÃO', 'VIDROS', 'METAIS', 'ACESSÓRIOS', 'SERVIÇOS', 'OUTROS'
@@ -13,6 +10,7 @@ export default function EstoqueModule() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterFamilia, setFilterFamilia] = useState('TODAS');
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   // Modal State
@@ -23,6 +21,9 @@ export default function EstoqueModule() {
     descricao: '',
     familia: 'MDF',
     unidade: 'UN',
+    marca: '',
+    fornecedor: '',
+    codigoFornecedor: '',
     preco_custo: 0
   });
 
@@ -64,7 +65,16 @@ export default function EstoqueModule() {
     if (res.success) {
       setIsModalOpen(false);
       setEditingItem(null);
-      setFormData({ sku: '', descricao: '', familia: 'MDF', unidade: 'UN', preco_custo: 0 });
+      setFormData({ 
+        sku: '', 
+        descricao: '', 
+        familia: 'MDF', 
+        unidade: 'UN', 
+        marca: '', 
+        fornecedor: '', 
+        codigoFornecedor: '', 
+        preco_custo: 0 
+      });
       loadData();
     }
   };
@@ -76,6 +86,29 @@ export default function EstoqueModule() {
     }
   };
 
+  const handleDeleteMassa = async () => {
+    if (selectedIds.length === 0) return;
+    if (confirm(`Deseja excluir os ${selectedIds.length} itens selecionados?`)) {
+      const res = await deleteProdutosEmMassa(selectedIds);
+      if (res.success) {
+        setSelectedIds([]);
+        loadData();
+      }
+    }
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.length === estoqueFiltrado.length) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(estoqueFiltrado.map(i => i.id));
+    }
+  };
+
+  const toggleSelectOne = (id: number) => {
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+  };
+
   const openModal = (item?: any) => {
     if (item) {
       setEditingItem(item);
@@ -84,18 +117,32 @@ export default function EstoqueModule() {
         descricao: item.descricao,
         familia: item.familia,
         unidade: item.unidade,
+        marca: item.marca || '',
+        fornecedor: item.fornecedor || '',
+        codigoFornecedor: item.codigoFornecedor || '',
         preco_custo: item.preco_custo
       });
     } else {
       setEditingItem(null);
-      setFormData({ sku: '', descricao: '', familia: 'MDF', unidade: 'UN', preco_custo: 0 });
+      setFormData({ 
+        sku: '', 
+        descricao: '', 
+        familia: 'MDF', 
+        unidade: 'UN', 
+        marca: '', 
+        fornecedor: '', 
+        codigoFornecedor: '', 
+        preco_custo: 0 
+      });
     }
     setIsModalOpen(true);
   };
 
   const estoqueFiltrado = estoque.filter(item => {
     const matchSearch = item.descricao.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                      item.sku.toLowerCase().includes(searchTerm.toLowerCase());
+                      item.sku.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                      (item.marca || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                      (item.fornecedor || '').toLowerCase().includes(searchTerm.toLowerCase());
     const matchFamilia = filterFamilia === 'TODAS' || item.familia === filterFamilia;
     return matchSearch && matchFamilia;
   });
@@ -131,6 +178,14 @@ export default function EstoqueModule() {
             <p className="text-sm text-muted-custom">Controle de insumos e matérias-primas industriais</p>
           </div>
           <div className="flex flex-wrap gap-3">
+            {selectedIds.length > 0 && (
+              <button 
+                onClick={handleDeleteMassa}
+                className="px-4 py-2 bg-red-500/10 border border-red-500/50 rounded-lg text-[10px] uppercase font-bold text-red-500 hover:bg-red-500 hover:text-white transition-all flex items-center gap-2"
+              >
+                🗑️ Excluir ({selectedIds.length})
+              </button>
+            )}
             <a 
               href="/Modelo_Importacao_MarcenAI.csv" 
               download 
@@ -162,7 +217,7 @@ export default function EstoqueModule() {
           <div className="flex-1 relative">
             <input 
               type="text"
-              placeholder="Pesquisar por descrição, SKU ou marca..."
+              placeholder="Pesquisar por descrição, SKU, marca ou fornecedor..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-4 bg-surface border-border-custom focus:border-primary text-sm h-11"
@@ -179,15 +234,25 @@ export default function EstoqueModule() {
         </div>
 
         {/* Inventory Table */}
-        <div className="table-container shadow-2xl">
+        <div className="table-container shadow-2xl overflow-x-auto">
           {loading ? (
             <div className="p-20 text-center text-muted-custom">Carregando dados do Neon...</div>
           ) : (
-            <table>
+            <table className="min-w-[1000px]">
               <thead>
                 <tr>
-                  <th className="w-32">Identificação</th>
+                  <th className="w-12 text-center">
+                    <input 
+                      type="checkbox" 
+                      checked={selectedIds.length === estoqueFiltrado.length && estoqueFiltrado.length > 0} 
+                      onChange={toggleSelectAll}
+                      className="cursor-pointer"
+                    />
+                  </th>
+                  <th className="w-32">SKU</th>
                   <th>Descrição do Insumo</th>
+                  <th className="w-32">Marca</th>
+                  <th className="w-32">Fornecedor</th>
                   <th className="w-40">Classificação</th>
                   <th className="w-40 text-right">Custo Unitário</th>
                   <th className="w-24 text-center">Ações</th>
@@ -196,13 +261,21 @@ export default function EstoqueModule() {
               <tbody>
                 {estoqueFiltrado.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="text-center py-20 text-muted-custom italic">
+                    <td colSpan={8} className="text-center py-20 text-muted-custom italic">
                       Nenhum item encontrado no banco de dados.
                     </td>
                   </tr>
                 ) : (
                   estoqueFiltrado.map(item => (
-                    <tr key={item.id} className="group">
+                    <tr key={item.id} className={`group ${selectedIds.includes(item.id) ? 'bg-primary/5' : ''}`}>
+                      <td className="text-center">
+                        <input 
+                          type="checkbox" 
+                          checked={selectedIds.includes(item.id)} 
+                          onChange={() => toggleSelectOne(item.id)}
+                          className="cursor-pointer"
+                        />
+                      </td>
                       <td>
                         <span className="badge-premium badge-orange font-mono tracking-tighter">
                           {item.sku}
@@ -210,8 +283,10 @@ export default function EstoqueModule() {
                       </td>
                       <td>
                         <div className="font-bold text-white leading-tight">{item.descricao}</div>
-                        <div className="text-[10px] text-muted-custom uppercase mt-1">Ref ID: #{item.id}</div>
+                        <div className="text-[10px] text-muted-custom uppercase mt-1">Ref ID: #{item.id} | Cod. Forn: {item.codigoFornecedor || 'N/A'}</div>
                       </td>
+                      <td className="text-muted-custom text-xs font-bold">{item.marca || '-'}</td>
+                      <td className="text-muted-custom text-xs font-bold">{item.fornecedor || '-'}</td>
                       <td>
                         <span className="badge-premium badge-green">
                           {item.familia}
@@ -251,8 +326,8 @@ export default function EstoqueModule() {
 
       {/* Modal de Cadastro/Edição */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="card-premium w-full max-w-lg p-8 shadow-2xl border-primary/20">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm overflow-y-auto">
+          <div className="card-premium w-full max-w-2xl p-8 shadow-2xl border-primary/20 my-8">
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-xl font-bold text-white">
                 {editingItem ? 'Editar Insumo Industrial' : 'Novo Registro de Estoque'}
@@ -261,7 +336,7 @@ export default function EstoqueModule() {
             </div>
             
             <form onSubmit={handleSave} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="flex flex-col gap-1">
                   <label className="text-[10px] uppercase font-bold text-muted-custom">SKU / Código</label>
                   <input 
@@ -296,7 +371,40 @@ export default function EstoqueModule() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] uppercase font-bold text-muted-custom">Marca</label>
+                  <input 
+                    type="text" 
+                    value={formData.marca} 
+                    onChange={(e) => setFormData({...formData, marca: e.target.value.toUpperCase()})}
+                    placeholder="EX: DURATEX"
+                    className="uppercase"
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] uppercase font-bold text-muted-custom">Fornecedor</label>
+                  <input 
+                    type="text" 
+                    value={formData.fornecedor} 
+                    onChange={(e) => setFormData({...formData, fornecedor: e.target.value.toUpperCase()})}
+                    placeholder="EX: MADEIRANIT"
+                    className="uppercase"
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] uppercase font-bold text-muted-custom">Cód. Fornecedor</label>
+                  <input 
+                    type="text" 
+                    value={formData.codigoFornecedor} 
+                    onChange={(e) => setFormData({...formData, codigoFornecedor: e.target.value.toUpperCase()})}
+                    placeholder="EX: 99827"
+                    className="uppercase"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="flex flex-col gap-1">
                   <label className="text-[10px] uppercase font-bold text-muted-custom">Unidade</label>
                   <input 
