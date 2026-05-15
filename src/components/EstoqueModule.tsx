@@ -7,7 +7,8 @@ import {
   importEstoqueEmMassa,
   getFamilias,
   upsertFamilia,
-  gerarSugestaoSku 
+  gerarSugestaoSku,
+  getHistoricoProduto
 } from '@/actions/estoque';
 
 export default function EstoqueModule() {
@@ -23,6 +24,17 @@ export default function EstoqueModule() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
   const [isAddingFamily, setIsAddingFamily] = useState(false);
+  const [itemHistory, setItemHistory] = useState<any[]>([]);
+
+  useEffect(() => {
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsModalOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleEsc);
+    return () => window.removeEventListener('keydown', handleEsc);
+  }, []);
   
   const [formData, setFormData] = useState({
     sku: '',
@@ -210,7 +222,7 @@ export default function EstoqueModule() {
     setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
   };
 
-  const openModal = (item?: any) => {
+  const openModal = async (item?: any) => {
     setIsAddingFamily(false);
     if (item) {
       setEditingItem(item);
@@ -224,8 +236,16 @@ export default function EstoqueModule() {
         codigoFornecedor: item.codigoFornecedor || '',
         preco_custo: item.preco_custo
       });
+      
+      // Buscar histórico
+      setItemHistory([]);
+      const res = await getHistoricoProduto(item.id);
+      if (res.success && res.data) {
+        setItemHistory(res.data);
+      }
     } else {
       setEditingItem(null);
+      setItemHistory([]);
       setFormData({ 
         sku: '', 
         descricao: '', 
@@ -602,8 +622,31 @@ export default function EstoqueModule() {
                 </button>
               </div>
             </form>
+
+            {editingItem && itemHistory.length > 0 && (
+              <div className="mt-8 pt-6 border-t border-primary/20">
+                <h4 className="text-sm font-bold text-white mb-4">Histórico de Alterações</h4>
+                <div className="space-y-3 max-h-40 overflow-y-auto pr-2 custom-scrollbar">
+                  {itemHistory.map((h, i) => (
+                    <div key={i} className="bg-dark/30 p-3 rounded-lg border border-border-custom flex justify-between items-center">
+                      <div className="flex flex-col gap-1">
+                        <span className="text-xs text-muted-custom font-bold">
+                          {new Date(h.alteradoEm).toLocaleString('pt-BR')}
+                        </span>
+                        <div className="text-[10px] text-muted-custom uppercase">
+                          Marca: <span className="text-white">{h.marca || '-'}</span> | 
+                          Forn: <span className="text-white">{h.fornecedor || '-'}</span>
+                        </div>
+                      </div>
+                      <div className="text-sm font-black text-white">
+                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(h.preco_custo)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
-        </div>
       )}
     </div>
   );

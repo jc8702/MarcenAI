@@ -14,6 +14,18 @@ export default function OrcamentosModule() {
   // Modals
   const [isNewOrcModalOpen, setIsNewOrcModalOpen] = useState(false);
   const [isAddItemModalOpen, setIsAddItemModalOpen] = useState(false);
+
+  useEffect(() => {
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsNewOrcModalOpen(false);
+        setIsAddItemModalOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleEsc);
+    return () => window.removeEventListener('keydown', handleEsc);
+  }, []);
+
   const [newCliente, setNewCliente] = useState('');
   
   // Inventory for Selection

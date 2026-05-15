@@ -249,8 +249,20 @@ export async function importEstoqueEmMassa(formData: FormData) {
     
     revalidatePath('/');
     return { success: true, count: batch.length };
+  } catch (error: any) {
+    console.error('Erro na importação:', error);
+    return { success: false, error: error.message || 'Falha ao importar dados' };
+  }
+}
+
+export async function getHistoricoProduto(produtoId: number) {
+  try {
+    const data = await db.select().from(historicoProdutos)
+      .where(eq(historicoProdutos.produtoId, produtoId))
+      .orderBy(desc(historicoProdutos.alteradoEm));
+    return { success: true, data };
   } catch (error) {
-    console.error('Erro na importação em massa:', error);
-    return { success: false, error: 'Erro ao processar planilha' };
+    console.error('Erro ao buscar histórico:', error);
+    return { success: false, error: 'Falha ao buscar histórico do item' };
   }
 }
